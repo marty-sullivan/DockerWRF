@@ -44,4 +44,9 @@ WORKDIR ./WRFV3
 COPY configure.wrf ./
 RUN ./compile em_real >& log.compile
 
+# Build WPS
+WORKDIR ../WPS
+COPY configure.wps ./
+RUN ./compile >& log.compile
+
 CMD /bin/bash
