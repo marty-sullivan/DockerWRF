@@ -15,8 +15,9 @@ ENV FFLAGS	-m64
 ENV NETCDF	/usr
 ENV WRFIO_NCD_LARGE_FILE_SUPPORT 1
 
-RUN yum localinstall -y https://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm && \
+RUN 	yum install -y epel-release && \
 	yum install -y \
+		openssh-server \
 		wget \ 
 		m4 \
 		make \
@@ -36,6 +37,9 @@ RUN yum localinstall -y https://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-re
 		zlib-devel \
 		jasper-devel && \
 	yum clean all && \
+	sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+	echo 'root:root' | chpasswd && \
+	ssh-keygen -A && \
 	ls ./*.tar.gz | xargs -n1 tar -xf && \
 	rm -f *.tar.gz
 
@@ -49,4 +53,5 @@ WORKDIR ../WPS
 COPY configure.wps ./
 RUN ./compile >& log.compile
 
-CMD /bin/bash
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
