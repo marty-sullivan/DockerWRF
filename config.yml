@@ -1,0 +1,26 @@
+global:
+        nodes:                  1
+        node-containers:        1
+
+ecs:
+        profile:        default
+        access-key:     profile
+        secret-key:     profile
+        ami-master:
+        ami-slave:
+        ssh-user:       ec2-user
+        instance-type:  c4.large
+        subnet:         subnet-7704a001
+        nfs-host:       master
+        nfs-path:       /usr/local/wrf
+        request-spot:   false
+        spot-price:     0.0
+        label:          default
+       
+# Placeholder for running on hosts w/ docker daemons
+#swarm:
+#        hosts:
+#                hostA:
+#                        hostname:       hostA.example.com
+#                        cores:          1
+
