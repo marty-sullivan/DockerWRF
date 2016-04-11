@@ -11,9 +11,10 @@ import yaml
 
 # Constants
 
-TAG_PREFIX = 'wrf-ecs-label-{0}-'
+TAG_PREFIX = 'wrf-ecs-{0}-'
 DIR_INSTANCE = './instance/{0}/'
 DEFAULT_AMI = 'ami-6ff4bd05'
+ECS_ROLE_POLICY_ARN = 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
 
 # Helpers
 def warning(*objs):
@@ -30,6 +31,7 @@ except ImportError:
     exit(1)
 
 try:
+    from boto3 import client
     from boto3.session import Session
     from botocore.exceptions import ClientError, NoCredentialsError
 except ImportError:
@@ -50,6 +52,7 @@ with open('config.yml', 'r') as yml:
     config = yaml.load(yml)
 
 # General Functions
+#def create_instance(ses, 
 
 # Functions
 def create():
@@ -62,11 +65,21 @@ def create():
         else:
             ses = Session(aws_access_key_id=ecsConfig['access-key'], aws_secret_access_key=ecsConfig['secret-key'])
         ec2 = ses.resource('ec2')
-        ecs = ses.resource('ecs')
         iam = ses.resource('iam')
+        ecs = client('ecs')
 
-        placement = ec2.create_placement_group(GroupName=tagPrefix + 'placement')
+        #placement = ec2.create_placement_group(GroupName=tagPrefix + 'placement', Strategy='cluster')
         subnet = ec2.Subnet(ecsConfig['subnet'])
+        
+        #sec_grp = subnet.vpc.create_security_group(GroupName=tagPrefix + 'sg', Description=tagPrefix + 'sg')
+        #sleep(1)
+        #sec_grp.create_tags(Tags=[{ 'Key': 'Name', 'Value': tagPrefix + 'sg' }]) 
+        #sec_grp.authorize_ingress(IpProtocol='tcp', FromPort=0, ToPort=65535, CidrIp='0.0.0.0/0')
+
+        #ecs.create_cluster(clusterName=tagPrefix + 'cluster')
+
+        policy = iam.Policy(ECS_ROLE_POLICY_ARN)
+
 
 def destroy():
     pass
