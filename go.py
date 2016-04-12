@@ -8,12 +8,15 @@ from sys import exit, stderr
 from time import sleep
 from urllib2 import urlopen
 import yaml
+import json
 
 # Constants
 
 TAG_PREFIX = 'wrf-ecs-{0}-'
 DIR_INSTANCE = './instance/{0}/'
 DEFAULT_AMI = 'ami-6ff4bd05'
+
+ECS_ASSUME_ROLE_POLICY_DOC = '{"Version": "2012-10-17", "Statement": [{"Action": "sts:AssumeRole", "Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}}]}'
 ECS_ROLE_POLICY_ARN = 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
 
 # Helpers
@@ -68,18 +71,21 @@ def create():
         iam = ses.resource('iam')
         ecs = client('ecs')
 
-        #placement = ec2.create_placement_group(GroupName=tagPrefix + 'placement', Strategy='cluster')
         subnet = ec2.Subnet(ecsConfig['subnet'])
+
+        role = iam.create_role(RoleName=tagPrefix + 'role', AssumeRolePolicyDocument=ECS_ASSUME_ROLE_POLICY_DOC)
+        role.attach_policy(PolicyArn=ECS_ROLE_POLICY_ARN)
         
-        #sec_grp = subnet.vpc.create_security_group(GroupName=tagPrefix + 'sg', Description=tagPrefix + 'sg')
-        #sleep(1)
-        #sec_grp.create_tags(Tags=[{ 'Key': 'Name', 'Value': tagPrefix + 'sg' }]) 
-        #sec_grp.authorize_ingress(IpProtocol='tcp', FromPort=0, ToPort=65535, CidrIp='0.0.0.0/0')
+        sec_grp = subnet.vpc.create_security_group(GroupName=tagPrefix + 'sg', Description=tagPrefix + 'sg')
+        sec_grp.create_tags(Tags=[{ 'Key': 'Name', 'Value': tagPrefix + 'sg' }]) 
+        sec_grp.authorize_ingress(IpPermissions=[{ 'IpProtocol': '-1', 'FromPort': 0, 'ToPort': 65535, 'UserIdGroupPairs': [{ 'GroupId': sec_grp.group_id  }]  }])
+        for cidr in ecsConfig['ssh-cidrs']:
+            sec_grp.authorize_ingress(IpProtocol='tcp', FromPort=22, ToPort=22, CidrIp=cidr)
 
-        #ecs.create_cluster(clusterName=tagPrefix + 'cluster')
+        plcmnt_grp = ec2.create_placement_group(GroupName=tagPrefix + 'placement', Strategy='cluster')
+        cluster = ecs.create_cluster(clusterName=tagPrefix + 'cluster')
 
-        policy = iam.Policy(ECS_ROLE_POLICY_ARN)
-
+        
 
 def destroy():
     pass

@@ -16,8 +16,8 @@ ecs:
         request-spot:   false
         spot-price:     0.0
         label:          default
-#	ingress-cidrs:
-#		- "0.0.0.0/0"
+        ssh-cidrs:
+                - "0.0.0.0/0"
        
 # Placeholder for running on hosts w/ docker daemons
 #swarm:
