@@ -6,10 +6,12 @@ ecs:
         profile:        default
         access-key:     profile
         secret-key:     profile
-        ami-master:
-        ami-slave:
+        ami-head:       ami-27928f4d
+        ami-work:       ami-8a8c91e0
         ssh-user:       ec2-user
         instance-type:  c4.large
+        ebs-size-gb:    20
+        ebs-iops:       0   
         subnet:         subnet-7704a001
         nfs-host:       master
         nfs-path:       /usr/local/wrf
@@ -19,7 +21,6 @@ ecs:
         ssh-cidrs:
                 - "0.0.0.0/0"
        
-# Placeholder for running on hosts w/ docker daemons
 #swarm:
 #        hosts:
 #                hostA:
