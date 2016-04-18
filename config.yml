@@ -3,27 +3,18 @@ global:
         node-containers:        1
 
 ecs:
-        profile:        default
+        label:          default
+        aws-profile:    default
         access-key:     profile
         secret-key:     profile
-        ami-head:       ami-27928f4d
-        ami-work:       ami-8a8c91e0
-        ssh-user:       ec2-user
+        subnet:         subnet-8e618aa4
         instance-type:  c4.large
+        base-ami:       ami-08111162
+        monitoring:     false
+        request-spot:   false
+        tenancy:        default
+        ebs-snapshot:   snap-cde209be
         ebs-size-gb:    20
         ebs-iops:       0   
-        subnet:         subnet-7704a001
-        nfs-host:       master
-        nfs-path:       /usr/local/wrf
-        request-spot:   false
-        spot-price:     0.0
-        label:          default
-        ssh-cidrs:
-                - "0.0.0.0/0"
-       
-#swarm:
-#        hosts:
-#                hostA:
-#                        hostname:       hostA.example.com
-#                        cores:          1
-
+        ssh-user:       ec2-user
+        ssh-cidr:       "0.0.0.0/0"      

@@ -2,7 +2,7 @@
 
 yum update -y
 yum install -y docker ecs-init nfs-utils
-mount -o defaults,noatime %NFSHOST%:/mnt /mnt
+mount -o defaults,noatime,bg,soft %NFS_HOST%:/mnt /mnt
 usermod -a -G docker ec2-user
 service docker start
 start ecs

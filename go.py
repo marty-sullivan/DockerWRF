@@ -2,7 +2,7 @@
 
 # Standard Imports
 from __future__ import print_function
-from os import chmod, path
+from os import chmod, path, remove
 from shutil import rmtree
 from sys import exit, stderr
 from threading import Thread
@@ -14,6 +14,7 @@ import json
 # Constants
 
 TAG_PREFIX = 'wrf-ecs-{0}-'
+IAM_PATH = '/{0}/'
 DIR_INSTANCE = './instance/{0}/'
 DEFAULT_AMI = 'ami-6ff4bd05'
 
@@ -60,6 +61,7 @@ def get_aws_resources():
     r['global'] = config['global']
     r['config'] = config['ecs']
     r['prefix'] = TAG_PREFIX.format(r['config']['label'])
+    r['iam_path'] = IAM_PATH.format(r['prefix'][:-1])
 
     # Boto3 Session
     if r['config']['access-key'] == 'profile':
@@ -76,8 +78,8 @@ def get_aws_resources():
     r['aws'] = { }
 
     # IAM Resources
-    r['aws']['roles'] = list(r['iam'].roles.filter(PathPrefix='/' + r['prefix'] + 'roles'))
-    r['aws']['instance_profiles'] = list(r['iam'].instance_profiles.filter(PathPrefix='/' + r['prefix'] + 'instance_profiles'))
+    r['aws']['roles'] = list(r['iam'].roles.filter(PathPrefix=r['iam_path']))
+    r['aws']['instance_profiles'] = list(r['iam'].instance_profiles.filter(PathPrefix=r['iam_path']))
 
     # EC2 Resources
     r['aws']['subnets'] = [r['ec2'].Subnet(r['config']['subnet'])]
@@ -106,28 +108,28 @@ def get_aws_resources():
         else:
             r['resource_count'] += len(r['aws'][resource])
 
+    # Enumerate Resource ID / Names
+    r['resource_ids'] = []
+    for resource in r['aws']:
+        if resource == 'subnets':
+            continue
+        elif resource == 'clusters':
+            for cluster in r['aws'][resource]:
+                r['resource_ids'].append(cluster['clusterName'])
+        elif resource == 'head_nodes' or resource == 'worker_nodes':
+            for instance in r['aws'][resource]:
+                r['resource_ids'].append(instance.id)
+        elif resource == 'security_groups':
+            for security_group in r['aws'][resource]:
+                r['resource_ids'].append(security_group.group_name)
+        else:
+            for res in r['aws'][resource]:
+                r['resource_ids'].append(res.name)
+
     return r
 
 # Functions
 def create_aws():
-    #globalConfig = config['global']
-    #ecsConfig = config['ecs']
-    #tagPrefix = TAG_PREFIX.format(ecsConfig['label'])
-
-    # AWS Session
-    #if ecsConfig['access-key'] == 'profile':
-    #    ses = Session(profile_name=ecsConfig['aws-profile'])
-    #else:
-    #    ses = Session(aws_access_key_id=ecsConfig['access-key'], aws_secret_access_key=ecsConfig['secret-key'])
-
-    # Clients
-    #ec2 = ses.resource('ec2')
-    #iam = ses.resource('iam')
-    #ecs = client('ecs')
-
-    # Subnet
-    #subnet = ec2.Subnet(ecsConfig['subnet'])
-
     r = get_aws_resources()
 
     if r['resource_count'] > 0:
@@ -136,88 +138,117 @@ def create_aws():
 
     # IAM Role
     r['aws']['roles'] = []
-    r['aws']['roles'][0] = r['iam'].create_role(Path='/' + r['prefix'] + 'role', AssumeRolePolicyDocument=ECS_ASSUME_ROLE_POLICY_DOC)
+    #r['aws']['roles'][0] = r['iam'].create_role(Path='/' + r['prefix'] + 'roles', RoleName=r['prefix'] + 'role', AssumeRolePolicyDocument=ECS_ASSUME_ROLE_POLICY_DOC)
+    r['aws']['roles'].append(r['iam'].create_role(Path=r['iam_path'], RoleName=r['prefix'] + 'role', AssumeRolePolicyDocument=ECS_ASSUME_ROLE_POLICY_DOC))
     r['aws']['roles'][0].attach_policy(PolicyArn=ECS_ROLE_POLICY_ARN)
         
     # IAM Instance Profile
-    instance_profile = iam.create_instance_profile(Path='/' + tagPrefix + 'instance-profiles', InstanceProfileName=tagPrefix + 'instance-profile')
-    instance_profile.add_role(RoleName=role.role_name)
+    r['aws']['instance_profiles'] = []
+    r['aws']['instance_profiles'].append(r['iam'].create_instance_profile(Path=r['iam_path'], InstanceProfileName=r['prefix'] + 'profile'))
+    r['aws']['instance_profiles'][0].add_role(RoleName=r['aws']['roles'][0].role_name)
 
     # Security Group
-    sec_grp = subnet.vpc.create_security_group(GroupName=tagPrefix + 'sg', Description=tagPrefix + 'sg')
-    sec_grp.authorize_ingress(IpPermissions=[
-        { 'IpProtocol': '-1', 'FromPort': 0, 'ToPort': 65535, 'UserIdGroupPairs': [{ 'GroupId': sec_grp.group_id  }]  },
-        { 'IpProtocol': 'tcp', 'FromPort': 22, 'ToPort': 22, 'IpRanges': [{ 'CidrIp': ecsConfig['ssh-cidr'] }] }
+    r['aws']['security_groups'] = []
+    r['aws']['security_groups'].append(r['aws']['subnets'][0].vpc.create_security_group(GroupName=r['prefix'] + 'sg', Description=r['prefix'] + 'sg'))
+    r['aws']['security_groups'][0].authorize_ingress(IpPermissions=[
+        { 'IpProtocol': '-1', 'FromPort': 0, 'ToPort': 65535, 'UserIdGroupPairs': [{ 'GroupId': r['aws']['security_groups'][0].group_id }] },
+        { 'IpProtocol': 'tcp', 'FromPort': 22, 'ToPort': 22, 'IpRanges': [{ 'CidrIp': r['config']['ssh-cidr'] }] }
     ])
 
     # Placement Group
-    plcmnt_grp = ec2.create_placement_group(GroupName=tagPrefix + 'placement', Strategy='cluster')
-
-    # ECS Cluster
-    cluster = ecs.create_cluster(clusterName=tagPrefix + 'cluster')
+    r['aws']['placement_groups'] = []
+    r['aws']['placement_groups'].append(r['ec2'].create_placement_group(GroupName=r['prefix'] + 'placement', Strategy='cluster'))
 
     # Key Pair
-    key_pair = ec2.create_key_pair(KeyName=tagPrefix + 'keypair')
-    with open('./keys/' + key_pair.key_name + '.pem', 'w') as pem:
-        pem.write(key_pair.key_material)
-        chmod('./keys/' + key_pair.key_name + '.pem', 0600)
+    r['aws']['key_pairs'] = []
+    r['aws']['key_pairs'].append(r['ec2'].create_key_pair(KeyName=r['prefix'] + 'keypair'))
+    with open('./keys/' + r['aws']['key_pairs'][0].key_name + '.pem', 'w') as pem:
+        pem.write(r['aws']['key_pairs'][0].key_material)
+        chmod('./keys/' + r['aws']['key_pairs'][0].key_name + '.pem', 0600)
 
-    # Head Node Network Interface
-    head_network = ec2.create_network_interface(SubnetId=subnet.subnet_id, Groups=[sec_grp.group_id])
+    # ECS Cluster
+    r['aws']['clusters'] = []
+    r['aws']['clusters'].append(r['ecs'].create_cluster(clusterName=r['prefix'] + 'cluster'))
 
-    # Worker Node User Data
-    with open('./user-data/worker', 'r') as ud:
-        worker_ud = ud.read()
-
-    worker_nodes = ec2.create_instances(ImageId=ecsConfig['base-ami'], \
-                       MinCount=globalConfig['nodes'], \
-                       MaxCount=globalConfig['nodes'], \
-                       KeyName=key_pair.key_name, \
-                       UserData=worker_ud, \
-                       InstanceType=ecsConfig['instance-type'], \
-                       Placement={ 'GroupName': plcmnt_grp.group_name, 'Tenancy': ecsConfig['tenancy'] }, \
-                       Monitoring={ 'Enabled': ecsConfig['monitoring'] }, \
-                       SubnetId=subnet.subnet_id, \
-                       InstanceInitiatedShutdownBehavior='terminate', \
-                       NetworkInterfaces=[{ 'DeviceIndex': 0, 'SubnetId': subnet.subnet_id, 'Groups': [sec_grp.group_id], 'AssociatePublicIpAddress': True }], \
-                       IamInstanceProfile={ 'Name': instance_profile.instance_profile_name })
-    exit(0)
+    sleep(10)
 
     # Head Node Block Devices
     head_block_devices = [
     {
         'DeviceName': '/dev/sdb',
         'Ebs': {
-            'SnapshotId': ecsConfig['ebs-snapshot'],
-            'VolumeSize': ecsConfig['ebs-size-gb'],
+            'SnapshotId': r['config']['ebs-snapshot'],
+            'VolumeSize': r['config']['ebs-size-gb'],
             'DeleteOnTermination': True,
-            'Encrypted': False,
             'VolumeType': 'gp2'
         }
     }]
 
-    if ecsConfig['ebs-iops'] > 0:
+    if r['config']['ebs-iops'] > 0:
         head_block_devices[0]['Ebs']['VolumeType'] = 'io1'
-        head_block_devices[0]['Ebs']['Iops'] = ecsConfig['ebs-iops']
+        head_block_devices[0]['Ebs']['Iops'] = r['config']['ebs-iops']
 
     # Head Node User Data
     with open('./user-data/head', 'r') as ud:
         head_ud = ud.read()
 
     # Head Node Instance
-'''
-    head_node = ec2.create_instances(ImageId=ecsConfig['base-ami'], \
+    r['aws']['head_nodes'] = r['ec2'].create_instances(ImageId=r['config']['base-ami'], \
                     MinCount=1, \
                     MaxCount=1, \
-                    KeyName=key_pair.key_name, \
+                    KeyName=r['aws']['key_pairs'][0].key_name, \
                     UserData=head_ud, \
-                    InstanceType=ecsConfig['instance-type'], \
-                    Placement={ 'GroupName': plcmnt_grp.group_name, 'Tenancy': ecsConfig['tenancy'] }, \
-                    BlockDeviceMapping=head_block_devices, \
-                    Monitoring={ 'Enabled': ecsConfig['monitoring'] }, \
-                    SubnetId=subnet.subnet_id, \
+                    InstanceType=r['config']['instance-type'], \
+                    Placement={ 'GroupName': r['aws']['placement_groups'][0].group_name, 'Tenancy': r['config']['tenancy'] }, \
+                    BlockDeviceMappings=head_block_devices, \
+                    Monitoring={ 'Enabled': r['config']['monitoring'] }, \
                     InstanceInitiatedShutdownBehavior='terminate', \
-'''               
+                    NetworkInterfaces=[{ 
+                        'DeviceIndex': 0, 
+                        'SubnetId': r['aws']['subnets'][0].subnet_id, 
+                        'Groups': [r['aws']['security_groups'][0].group_id],
+                        'AssociatePublicIpAddress': True
+                    }], \
+                    IamInstanceProfile={ 'Arn': r['aws']['instance_profiles'][0].arn })
+
+    # Head Node Network Interface
+    head_network = r['aws']['head_nodes'][0].network_interfaces[0]
+
+    # Worker Node User Data
+    with open('./user-data/worker', 'r') as ud:
+        worker_ud = ud.read()
+        worker_ud = worker_ud.replace('%NFS_HOST%', head_network.private_ip_address)
+
+    r['aws']['worker_nodes'] = r['ec2'].create_instances(ImageId=r['config']['base-ami'], \
+                       MinCount=r['global']['nodes'], \
+                       MaxCount=r['global']['nodes'], \
+                       KeyName=r['aws']['key_pairs'][0].key_name, \
+                       UserData=worker_ud, \
+                       InstanceType=r['config']['instance-type'], \
+                       Placement={ 'GroupName': r['aws']['placement_groups'][0].group_name, 'Tenancy': r['config']['tenancy'] }, \
+                       Monitoring={ 'Enabled': r['config']['monitoring'] }, \
+                       InstanceInitiatedShutdownBehavior='terminate', \
+                       NetworkInterfaces=[{ 
+                           'DeviceIndex': 0, 
+                           'SubnetId': r['aws']['subnets'][0].subnet_id, 
+                           'Groups': [r['aws']['security_groups'][0].group_id], 
+                           'AssociatePublicIpAddress': True 
+                       }], \
+                       IamInstanceProfile={ 'Arn': r['aws']['instance_profiles'][0].arn })
+
+    print('All resources are created. Waiting for nodes to be ready.')
+    for instance in r['aws']['head_nodes']:
+        instance.create_tags(Tags=[{ 'Key': 'Name', 'Value': r['prefix'] + 'head' }])
+        instance.wait_until_running()
+    
+    for instance in r['aws']['worker_nodes']:
+        instance.create_tags(Tags=[{ 'Key': 'Name', 'Value': r['prefix'] + 'worker' }])
+        instance.wait_until_running()
+
+    #TODO: Add to ECS Cluster
+
+    print('Cluster Ready')
+        
 
 # Terminate Instance (Thread Target)
 def terminate_instance(instance):
@@ -236,6 +267,15 @@ def destroy_aws():
     if r['resource_count'] < 1:
         error('There are no resources for the label: ' + r['config']['label'])
         exit(1)
+
+    # Confirm Destruction
+    print('\n*** The following resources will be DESTROYED. Type DESTROY to continue or anything else to cancel. ***\n')
+    for i in r['resource_ids']:
+        print(i)
+    print('')
+    response = raw_input('--> ')
+    if response != 'DESTROY':
+        exit(0)
 
     # Terminate Instances
     threads = []
@@ -259,11 +299,27 @@ def destroy_aws():
     for c in r['aws']['clusters']:
         r['ecs'].delete_cluster(cluster=c['clusterArn'])
 
-    # All Other Resources
-    for resource in r['aws']:
-        if resource == 'head_nodes' or resource == 'worker_nodes' or resource == 'clusters':
-            continue
-        r['aws'][resource].delete()
+    # Role & Instance Profile
+    for role in r['aws']['roles']:
+        for instance_profile in role.instance_profiles.all():
+            instance_profile.remove_role(RoleName=role.name)
+            instance_profile.delete()
+        for policy in role.attached_policies.all():
+            role.detach_policy(PolicyArn=policy.arn)
+        role.delete()
+        
+    # Security Group
+    for sg in r['aws']['security_groups']:
+        sg.delete()
+
+    # Placement Group
+    for pg in r['aws']['placement_groups']:
+        pg.delete()
+
+    # Key Pair
+    for keypair in r['aws']['key_pairs']:
+        remove('./keys/' + keypair.key_name + '.pem')
+        keypair.delete()
 
 commands = { 'create_aws': create_aws, 'destroy_aws': destroy_aws }
 
