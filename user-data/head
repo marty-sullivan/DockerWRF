@@ -10,3 +10,4 @@ start ecs
 service nfs start
 exportfs -o rw *:/mnt
 docker pull mjs472/wrf-base:0.0.1
+echo "ready" > /ready

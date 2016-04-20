@@ -3,11 +3,13 @@
 # Standard Imports
 from __future__ import print_function
 from os import chmod, path, remove
+from pssh.pssh_client import ParallelSSHClient
 from shutil import rmtree
 from sys import exit, stderr
 from threading import Thread
-from time import sleep
+from time import sleep, time
 from urllib2 import urlopen
+import paramiko
 import yaml
 import json
 
@@ -45,7 +47,8 @@ except ImportError:
 
 # Parse Args
 parser = ArgumentParser(description="WRF MPI Docker Cluster Runner")
-parser.add_argument("command", type=str, choices=['create_aws', 'destroy_aws'], help="what to do...")
+parser.add_argument("command", type=str, choices=['create_aws', 'destroy_aws', 'debug'], help="what to do...")
+parser.add_argument('-t', '--timeout', type=int, default=600, help='time to wait for nodes to respond after creation in seconds. DEFAULT: 600')
 
 global go_args
 go_args = parser.parse_args()
@@ -86,8 +89,17 @@ def get_aws_resources():
     r['aws']['security_groups'] = list(r['ec2'].security_groups.filter(Filters=[{ 'Name': 'group-name', 'Values': [r['prefix'] + 'sg'] }]))
     r['aws']['placement_groups'] = list(r['ec2'].placement_groups.filter(Filters=[{ 'Name': 'group-name', 'Values': [r['prefix'] + 'placement'] }]))
     r['aws']['key_pairs'] = list(r['ec2'].key_pairs.filter(Filters=[{ 'Name': 'key-name', 'Values': [r['prefix'] + 'keypair']  }]))
-    r['aws']['head_nodes'] = []
-    r['aws']['worker_nodes'] = []
+    r['rsa_keys'] = []
+    for key_pair in r['aws']['key_pairs']:
+        r['rsa_keys'].append('./keys/' + key_pair.key_name + '.pem')
+    r['aws']['head_nodes'] = list(r['ec2'].instances.filter(Filters=[
+                                                         { 'Name': 'tag:Name', 'Values': [r['prefix'] + 'head']  },
+                                                         { 'Name': 'instance-state-name', 'Values': ['pending', 'running', 'shutting-down', 'stopping', 'stopped'] }
+                                                     ]))
+    r['aws']['worker_nodes'] = list(r['ec2'].instances.filter(Filters=[
+                                                           { 'Name': 'tag:Name', 'Values': [r['prefix'] + 'worker']  },
+                                                           { 'Name': 'instance-state-name', 'Values': ['pending', 'running', 'shutting-down', 'stopping', 'stopped'] }
+                                                       ]))
 
     # ECS Resources
     r['aws']['clusters'] = r['ecs'].describe_clusters(clusters=[r['prefix'] + 'cluster'])['clusters']
@@ -128,6 +140,26 @@ def get_aws_resources():
 
     return r
 
+def enumerate_hosts(r):
+    hosts = { }
+    hosts['head_private_ips'] = []
+    hosts['head_public_ips'] = []
+    hosts['worker_private_ips'] = []
+    hosts['worker_public_ips'] = []
+
+    for instance in r['aws']['head_nodes']:
+        hosts['head_private_ips'].append(instance.network_interfaces[0].private_ip_address)
+        hosts['head_public_ips'].append(instance.network_interfaces[0].association_attribute['PublicIp'])
+
+    for instance in r['aws']['worker_nodes']:
+        hosts['worker_private_ips'].append(instance.network_interfaces[0].private_ip_address)
+        hosts['worker_public_ips'].append(instance.network_interfaces[0].association_attribute['PublicIp'])
+
+    hosts['all_private_ips'] = hosts['head_private_ips'] + hosts['worker_private_ips']
+    hosts['all_public_ips'] = hosts['head_public_ips'] + hosts['worker_public_ips']
+
+    return hosts    
+
 # Functions
 def create_aws():
     r = get_aws_resources()
@@ -162,9 +194,11 @@ def create_aws():
     # Key Pair
     r['aws']['key_pairs'] = []
     r['aws']['key_pairs'].append(r['ec2'].create_key_pair(KeyName=r['prefix'] + 'keypair'))
-    with open('./keys/' + r['aws']['key_pairs'][0].key_name + '.pem', 'w') as pem:
+    r['rsa_keys'] = []
+    r['rsa_keys'].append('./keys/' + r['aws']['key_pairs'][0].key_name + '.pem')
+    with open(r['rsa_keys'][0], 'w') as pem:
         pem.write(r['aws']['key_pairs'][0].key_material)
-        chmod('./keys/' + r['aws']['key_pairs'][0].key_name + '.pem', 0600)
+        chmod(r['rsa_keys'][0], 0600)
 
     # ECS Cluster
     r['aws']['clusters'] = []
@@ -236,26 +270,58 @@ def create_aws():
                        }], \
                        IamInstanceProfile={ 'Arn': r['aws']['instance_profiles'][0].arn })
 
+    r['aws']['all_nodes'] = r['aws']['head_nodes'] + r['aws']['worker_nodes']
+
+    # Wait Until Instances Ready
     print('All resources are created. Waiting for nodes to be ready.')
+
+    sleep(10)
     for instance in r['aws']['head_nodes']:
         instance.create_tags(Tags=[{ 'Key': 'Name', 'Value': r['prefix'] + 'head' }])
-        instance.wait_until_running()
-    
+
     for instance in r['aws']['worker_nodes']:
         instance.create_tags(Tags=[{ 'Key': 'Name', 'Value': r['prefix'] + 'worker' }])
+    
+    for instance in r['aws']['all_nodes']:
         instance.wait_until_running()
 
+    r['aws']['hosts'] = enumerate_hosts(r)
+    rsa = paramiko.RSAKey.from_private_key_file(r['rsa_keys'][0])
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    startTime = time()
+    for host in r['aws']['hosts']['all_public_ips']:
+        elapsed = time() - startTime
+        if elapsed > go_args.timeout:
+            error('Nodes have taken too long to respond. Resources are still active, run ./go.py destroy_aws to delete them after troubleshooting.')
+            exit(1)
+
+        status = ''
+        while status != 'ready':
+            try:
+                ssh.connect(hostname=host, username=r['config']['ssh-user'], pkey=rsa)
+                stdin, stdout, stderr = ssh.exec_command('cat /ready')
+                status = stdout.read().strip()
+                ssh.close()
+            except:
+                pass
+            sleep(15)
+    
     #TODO: Add to ECS Cluster
 
     print('Cluster Ready')
-        
+     
+def debug():
+    r = get_aws_resources()
+    hosts = enumerate_hosts(r)
+    ssh.connect(hostname='ec2-54-208-177-183.compute-1.amazonaws.com', username=r['config']['ssh-user'], pkey=rsa) 
+    print(stdout.read().strip())
+    ssh.close()
 
 # Terminate Instance (Thread Target)
 def terminate_instance(instance):
     if instance.state['Name'] != 'terminated':
-        for network_interface in instance.network_interfaces:
-            network_interface.detach()
-            network_interface.delete()
         instance.terminate()
         instance.wait_until_terminated()
 
@@ -321,7 +387,7 @@ def destroy_aws():
         remove('./keys/' + keypair.key_name + '.pem')
         keypair.delete()
 
-commands = { 'create_aws': create_aws, 'destroy_aws': destroy_aws }
+commands = { 'create_aws': create_aws, 'destroy_aws': destroy_aws, 'debug': debug}
 
 # Entry
 
