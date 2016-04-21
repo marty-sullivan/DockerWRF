@@ -2,16 +2,12 @@
 
 # Standard Imports
 from __future__ import print_function
-from os import chmod, path, remove
-from pssh.pssh_client import ParallelSSHClient
-from shutil import rmtree
+from os import chmod, remove
 from sys import exit, stderr
 from threading import Thread
 from time import sleep, time
-from urllib2 import urlopen
 import paramiko
 import yaml
-import json
 
 # Constants
 
@@ -225,6 +221,7 @@ def create_aws():
     # Head Node User Data
     with open('./user-data/head', 'r') as ud:
         head_ud = ud.read()
+        head_ud = head_ud.replace('%ECS_CLUSTER_NAME%', r['aws']['clusters'][0]['cluster']['clusterName'])
 
     # Head Node Instance
     r['aws']['head_nodes'] = r['ec2'].create_instances(ImageId=r['config']['base-ami'], \
@@ -251,6 +248,7 @@ def create_aws():
     # Worker Node User Data
     with open('./user-data/worker', 'r') as ud:
         worker_ud = ud.read()
+        worker_ud = worker_ud.replace('%ECS_CLUSTER_NAME%', r['aws']['clusters'][0]['cluster']['clusterName'])
         worker_ud = worker_ud.replace('%NFS_HOST%', head_network.private_ip_address)
 
     r['aws']['worker_nodes'] = r['ec2'].create_instances(ImageId=r['config']['base-ami'], \
@@ -303,13 +301,13 @@ def create_aws():
                 ssh.connect(hostname=host, username=r['config']['ssh-user'], pkey=rsa)
                 stdin, stdout, stderr = ssh.exec_command('cat /ready')
                 status = stdout.read().strip()
+                if status == 'ready':
+                   pass 
                 ssh.close()
             except:
                 pass
             sleep(15)
     
-    #TODO: Add to ECS Cluster
-
     print('Cluster Ready')
      
 def debug():

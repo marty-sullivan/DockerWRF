@@ -2,6 +2,7 @@
 
 yum update -y
 yum install -y docker ecs-init nfs-utils
+echo ECS_CLUSTER=%ECS_CLUSTER_NAME% >> /etc/ecs/ecs.config
 usermod -a -G docker ec2-user
 service docker start
 start ecs
