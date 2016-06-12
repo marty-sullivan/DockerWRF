@@ -1,0 +1,20 @@
+global:
+        nodes:                  1
+        node-containers:        1
+
+ecs:
+        label:          default
+        aws-profile:    default
+        access-key:     profile
+        secret-key:     profile
+        subnet:         subnet-8e618aa4
+        instance-type:  c4.large
+        base-ami:       ami-08111162 #TODO - Region
+        monitoring:     false
+        request-spot:   false
+        tenancy:        default
+        ebs-snapshot:   snap-cde209be
+        ebs-size-gb:    20
+        ebs-iops:       0   
+        ssh-user:       ec2-user
+        ssh-cidr:       "0.0.0.0/0"      
