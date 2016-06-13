@@ -15,27 +15,27 @@ COPY    ssh /root/.ssh
 WORKDIR /opt
 COPY    *.tar.gz ./
 
-RUN	yum install -y epel-release && \
+RUN yum install -y epel-release && \
     yum install -y \
-		  openssh-server \
-		  wget \ 
-		  m4 \
-		  make \
-		  tcsh \
-		  which \
-		  time \
-		  gcc \
-  		gcc-c++ \
-	  	gcc-gfortran \
-		  netcdf-devel \
-  		netcdf-cxx-devel \
-	  	netcdf-fortran-devel \
-		  netcdf-mpich-devel \
-  		netcdf-fortran-mpich-devel \
-	  	mpich-devel \
-		  libpng-devel \
-  		zlib-devel \
-	  	jasper-devel && \
+      openssh-server \
+      wget \ 
+      m4 \
+      make \
+      tcsh \
+      which \
+      time \
+      gcc \
+      gcc-c++ \
+      gcc-gfortran \
+      netcdf-devel \
+      netcdf-cxx-devel \
+      netcdf-fortran-devel \
+      netcdf-mpich-devel \
+      netcdf-fortran-mpich-devel \
+      mpich-devel \
+      libpng-devel \
+      zlib-devel \
+      jasper-devel && \
     yum clean all && \
     ssh-keygen -A && \
     ls ./*.tar.gz | xargs -n1 tar -xf && \
