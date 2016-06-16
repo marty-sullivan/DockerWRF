@@ -2,13 +2,14 @@ FROM centos
 MAINTAINER Marty Sullivan <marty.sullivan@cornell.edu>
 
 ENV PATH      $PATH:/usr/lib64/mpich/bin
-ENV CC 		    gcc
-ENV CXX 	    g++
-ENV FC 		    gfortran
-ENV FCFLAGS 	-m64
+ENV CC        gcc
+ENV CXX       g++
+ENV FC        gfortran
+ENV FCFLAGS   -m64
 ENV F77		    gfortran
 ENV FFLAGS	  -m64
 ENV NETCDF	  /usr
+
 ENV WRFIO_NCD_LARGE_FILE_SUPPORT 1
 
 COPY    ssh /root/.ssh
@@ -37,6 +38,7 @@ RUN yum install -y epel-release && \
       zlib-devel \
       jasper-devel && \
     yum clean all && \
+    chmod -R 700 /root/.ssh && \
     ssh-keygen -A && \
     ls ./*.tar.gz | xargs -n1 tar -xf && \
     rm -f *.tar.gz
@@ -50,5 +52,8 @@ WORKDIR  ../WPS
 RUN      ./compile >& log.compile
 
 WORKDIR /root
-EXPOSE  22
-CMD     ["/usr/sbin/sshd", "-D"]
+COPY    scripts/*.py ./
+
+#EXPOSE  22
+#CMD     ["/usr/sbin/sshd", "-D"]
+CMD ["/root/entry.py"]
