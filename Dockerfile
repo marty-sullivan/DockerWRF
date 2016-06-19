@@ -52,7 +52,7 @@ WORKDIR  ../WPS
 RUN      ./compile >& log.compile
 
 WORKDIR /root
-COPY    scripts/*.py ./
+COPY    scripts/* ./
 
 #EXPOSE  22
 #CMD     ["/usr/sbin/sshd", "-D"]
