@@ -1,0 +1,41 @@
+{
+
+  "share": {
+    "wrf_core":           ["ARW"],
+    "max_dom":            [1],
+    "start_date":         [],
+    "end_date":           [],
+    "interval_seconds":   [21600],
+    "io_form_geogrid":    [2]
+  },
+
+  "geogrid": {
+    "parent_id":          [1],
+    "parent_grid_ratio":  [1],
+    "i_parent_start":     [],
+    "j_parent_start":     [],
+    "e_we":               [],
+    "e_sn":               [],
+    "geog_data_res":      [],
+    "dx":                 [],
+    "dy":                 [],
+    "map_proj":           [],
+    "ref_lat":            [],
+    "ref_lon":            [],
+    "truelat1":           [],
+    "truelat2":           [],
+    "stand_lon":          [],
+    "geog_data_path":     []
+  },
+
+  "ungrib": {
+    "out_format":         [],
+    "prefix":             []
+  },
+
+  "metgrid": {
+    "fg_name":            [],
+    "io_form_metgrid":    []
+  }
+
+}
