@@ -39,8 +39,8 @@ else:
 gribs = []
 for hour in range(0, 243, 3):
   gribs.append(GFS_FILE.format(cycle.strftime('%Y%m%d%H'), cycle.strftime('%H'), hour))
-for hour in range(252, 396, 12):
-  gribs.append(GFS_FILE.format(cycle.strftime('%Y%m%d%H'), cycle.strftime('%H'), hour))
+#for hour in range(252, 396, 12):
+#  gribs.append(GFS_FILE.format(cycle.strftime('%Y%m%d%H'), cycle.strftime('%H'), hour))
     
 threads = []
 for grib in gribs:

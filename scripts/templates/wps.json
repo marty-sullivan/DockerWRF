@@ -1,7 +1,7 @@
 {
 
   "share": {
-    "wrf_core":           ["ARW"],
+    "wrf_core":           ["'ARW'"],
     "max_dom":            [1],
     "start_date":         [],
     "end_date":           [],
@@ -17,8 +17,8 @@
     "e_we":               [74],
     "e_sn":               [61],
     "geog_data_res":      ["'10m'"],
-    "dx":                 [100000],
-    "dy":                 [100000],
+    "dx":                 [32000],
+    "dy":                 [32000],
     "map_proj":           ["'lambert'"],
     "ref_lat":            [45.49],
     "ref_lon":            [-89.46],
