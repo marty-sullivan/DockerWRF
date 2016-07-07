@@ -8,9 +8,9 @@ from shutil import rmtree
 from subprocess import call, STDOUT
 import json
 
-DIR_WORK  = '/data/' + datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S') + '/'
+DIR_WORK  = '/root/' + datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S') + '/'
 DIR_GFS   = DIR_WORK + 'gfs/'
-DIR_GEOG  = '/data/WPS_GEOG/'
+DIR_GEOG  = '/opt/WPS_GEOG/'
 DIR_WPS   = '/opt/WPS/'
 DIR_WRF   = '/opt/WRFV3/test/em_real/'
 DIR_OLD   = getcwd()
@@ -81,6 +81,21 @@ namelist_wrf['time_control']['end_hour'].append(endTime.strftime("%H"))
 namelist_wrf['time_control']['end_minute'].append(endTime.strftime("%M"))
 namelist_wrf['time_control']['end_second'].append(endTime.strftime("%S"))
 
+# Set WPS & WRF Coordinates
+namelist_wps['geogrid']['e_we'].append(env['POINTS_WE'])
+namelist_wps['geogrid']['e_sn'].append(env['POINTS_SN'])
+namelist_wps['geogrid']['dx'].append(env['XSPACING'])
+namelist_wps['geogrid']['dy'].append(env['YSPACING'])
+namelist_wps['geogrid']['truelat1'].append(env['LATITUDE'])
+namelist_wps['geogrid']['truelat2'].append(env['LATITUDE'])
+namelist_wps['geogrid']['ref_lat'].append(env['LATITUDE'])
+namelist_wps['geogrid']['ref_lon'].append(env['LONGITUDE'])
+
+namelist_wrf['domains']['e_we'].append(env['POINTS_WE'])
+namelist_wrf['domains']['e_sn'].append(env['POINTS_SN'])
+namelist_wrf['domains']['dx'].append(env['XSPACING'])
+namelist_wrf['domains']['dy'].append(env['YSPACING'])
+
 # Write Namelists
 writeNamelist('namelist.wps', namelist_wps)
 writeNamelist('namelist.input', namelist_wrf)
@@ -107,4 +122,4 @@ with open('output.log', 'w') as logfile:
   cmd_wrf = 'time mpiexec -n {0} {1}'.format(cpu_count(), DIR_WRF + 'wrf.exe')
   call(cmd_wrf.split(), stdout=logfile, stderr=STDOUT)
 
-print 'SUCCESS'
+print 'DONE'

@@ -1,6 +1,7 @@
 FROM centos
 MAINTAINER Marty Sullivan <marty.sullivan@cornell.edu>
 
+# Compile Environment
 ENV PATH      $PATH:/usr/lib64/mpich/bin
 ENV CC        gcc
 ENV CXX       g++
@@ -10,15 +11,11 @@ ENV F77		    gfortran
 ENV FFLAGS	  -m64
 ENV NETCDF	  /usr
 
-ENV WRFIO_NCD_LARGE_FILE_SUPPORT 1
-
-COPY    ssh /root/.ssh
 WORKDIR /opt
 COPY    *.tar.gz ./
 
 RUN yum install -y epel-release && \
     yum install -y \
-      openssh-server \
       wget \ 
       m4 \
       make \
@@ -38,8 +35,6 @@ RUN yum install -y epel-release && \
       zlib-devel \
       jasper-devel && \
     yum clean all && \
-    chmod -R 700 /root/.ssh && \
-    ssh-keygen -A && \
     ls ./*.tar.gz | xargs -n1 tar -xf && \
     rm -f *.tar.gz
 
@@ -51,9 +46,17 @@ RUN      ./compile em_real >& log.compile
 WORKDIR  ../WPS
 RUN      ./compile >& log.compile
 
+# Default Run Environment
+ENV INPUT_DATA  "GFS"
+ENV INPUT_RES   "1p0"
+ENV LATITUDE    "42.4534"
+ENV LONGITUDE   "76.4735"
+ENV POINTS_WE   "94"
+ENV POINTS_SN   "38"
+ENV XSPACING    "32000"
+ENV YSPACING    "32000"
+
 WORKDIR /root
 COPY    scripts/* ./
 
-#EXPOSE  22
-#CMD     ["/usr/sbin/sshd", "-D"]
 CMD ["/root/entry.py"]
