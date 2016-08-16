@@ -8,9 +8,9 @@ from shutil import rmtree
 from subprocess import call, STDOUT
 import json
 
-DIR_WORK  = '/root/' + datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S') + '/'
+DIR_WORK  = '/mnt/runs/' + datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S') + '/'
 DIR_GFS   = DIR_WORK + 'gfs/'
-DIR_GEOG  = '/opt/WPS_GEOG/'
+DIR_GEOG  = '/mnt/shared/WPS_GEOG/'
 DIR_WPS   = '/opt/WPS/'
 DIR_WRF   = '/opt/WRFV3/test/em_real/'
 DIR_OLD   = getcwd()
@@ -90,6 +90,7 @@ namelist_wps['geogrid']['truelat1'].append(env['LATITUDE'])
 namelist_wps['geogrid']['truelat2'].append(env['LATITUDE'])
 namelist_wps['geogrid']['ref_lat'].append(env['LATITUDE'])
 namelist_wps['geogrid']['ref_lon'].append(env['LONGITUDE'])
+namelist_wps['geogrid']['geog_data_path'].append("'{0}'".format(DIR_GEOG))
 
 namelist_wrf['domains']['e_we'].append(env['POINTS_WE'])
 namelist_wrf['domains']['e_sn'].append(env['POINTS_SN'])
