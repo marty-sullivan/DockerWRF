@@ -1,4 +1,4 @@
-FROM centos
+FROM centos:7
 MAINTAINER Marty Sullivan <marty.sullivan@cornell.edu>
 
 # Compile Environment
